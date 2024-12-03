@@ -1,6 +1,3 @@
-/**
- * @vitest-environment node-with-websockets
- */
 import { WebSocketInterceptor } from "@mswjs/interceptors/WebSocket";
 
 import {
@@ -163,6 +160,27 @@ it("sends a mocked custom incoming reply message", async () => {
     '["3","3","room:lobby","phx_join",{}]',
     '["3","5","room:lobby","hello",{"name":"John"}]',
   ]);
+});
+
+it("sends a pushed message", async () => {
+  interceptor.once("connection", (connection) => {
+    const { client } = toPhoenixChannel(connection);
+
+    client.channel("room:lobby", (channel) => {
+      channel.push("hello", { name: "John" });
+    });
+  });
+
+  const socket = new Socket("wss://example.com/socket");
+  socket.connect();
+  const channel = socket.channel("room:lobby");
+  const mock = vi.fn(() => {});
+  channel.on("hello", mock);
+  channel.join();
+
+  await new Promise((resolve) => setTimeout(resolve, 10));
+
+  expect(mock).toHaveBeenCalledOnce();
 });
 
 it("intercepts incoming server event", async () => {
