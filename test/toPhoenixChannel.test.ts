@@ -178,9 +178,7 @@ it("sends a pushed message", async () => {
   channel.on("hello", mock);
   channel.join();
 
-  await new Promise((resolve) => setTimeout(resolve, 10));
-
-  expect(mock).toHaveBeenCalledOnce();
+	await expect.poll(() => mock).toHaveBeenCalled();
 });
 
 it("intercepts incoming server event", async () => {
@@ -214,9 +212,7 @@ it("intercepts incoming server event", async () => {
 
     // Forward the raw outgoing client events
     connection.client.addEventListener("message", (event) => {
-      setTimeout(() => {
-        connection.server.send(event.data);
-      }, 10);
+			connection.server.send(event.data);
     });
 
     const { server } = toPhoenixChannel(connection);
@@ -278,9 +274,7 @@ it("modifies incoming server event", async () => {
 
     // Forward the raw outgoing client events
     connection.client.addEventListener("message", (event) => {
-      setTimeout(() => {
-        connection.server.send(event.data);
-      }, 10);
+			connection.server.send(event.data);
     });
 
     const phoenix = toPhoenixChannel(connection);
