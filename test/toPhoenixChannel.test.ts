@@ -1,6 +1,3 @@
-/**
- * @vitest-environment node-with-websockets
- */
 import { WebSocketInterceptor } from "@mswjs/interceptors/WebSocket";
 
 import {
@@ -165,6 +162,25 @@ it("sends a mocked custom incoming reply message", async () => {
   ]);
 });
 
+it("sends a pushed message", async () => {
+  interceptor.once("connection", (connection) => {
+    const { client } = toPhoenixChannel(connection);
+
+    client.channel("room:lobby", (channel) => {
+      channel.push("hello", { name: "John" });
+    });
+  });
+
+  const socket = new Socket("wss://example.com/socket");
+  socket.connect();
+  const channel = socket.channel("room:lobby");
+  const mock = vi.fn(() => {});
+  channel.on("hello", mock);
+  channel.join();
+
+	await expect.poll(() => mock).toHaveBeenCalled();
+});
+
 it("intercepts incoming server event", async () => {
   const incomingServerDataPromise = new DeferredPromise<unknown>();
   const incomingClientDataPromise = new DeferredPromise<unknown>();
@@ -196,9 +212,7 @@ it("intercepts incoming server event", async () => {
 
     // Forward the raw outgoing client events
     connection.client.addEventListener("message", (event) => {
-      setTimeout(() => {
-        connection.server.send(event.data);
-      }, 10);
+			connection.server.send(event.data);
     });
 
     const { server } = toPhoenixChannel(connection);
@@ -260,9 +274,7 @@ it("modifies incoming server event", async () => {
 
     // Forward the raw outgoing client events
     connection.client.addEventListener("message", (event) => {
-      setTimeout(() => {
-        connection.server.send(event.data);
-      }, 10);
+			connection.server.send(event.data);
     });
 
     const phoenix = toPhoenixChannel(connection);
