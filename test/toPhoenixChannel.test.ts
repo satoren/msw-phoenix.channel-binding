@@ -1,12 +1,13 @@
-import { WebSocketInterceptor } from "@mswjs/interceptors/WebSocket";
+import { WebSocketConnectionData, WebSocketInterceptor } from "@mswjs/interceptors/WebSocket";
 
 import {
   type PhoenixChannelMessage,
   toPhoenixChannel,
   decodePayload,
   encodePayload,
+  MockPresence,
 } from "../src/index";
-import { Socket } from "phoenix";
+import { Socket, Presence } from "phoenix";
 import { WebSocketServer } from "ws";
 import { beforeAll, afterAll, it, expect } from "vitest";
 
@@ -311,4 +312,152 @@ it("modifies incoming server event", async () => {
     topic: "room:lobby",
   });
   expect(await incomingClientDataPromise.promise).toEqual({ reason: "aaa" });
+});
+
+it("invoke onLeave when leaving channel", async () => {
+  const onLeaveMock = vi.fn(() => "ok" as const);
+  interceptor.once("connection", (connection) => {
+    const { client } = toPhoenixChannel(connection);
+
+    client.channel("room:lobby", (channel) => {
+      channel.push("hello", { name: "John" });
+      channel.onLeave = onLeaveMock;
+    });
+  });
+
+  const socket = new Socket("wss://example.com/socket");
+  socket.connect();
+  const channel = socket.channel("room:lobby");
+  const mock = vi.fn(() => {});
+  channel.on("hello", mock);
+  channel.join();
+  channel.leave();
+
+  await expect.poll(() => onLeaveMock).toHaveBeenCalled();
+});
+
+describe("Presence", () => {
+  it("presence state", async () => {
+    const mockPresence = new MockPresence();
+    const tracker = mockPresence.track("1", { user_id: "1" });
+    interceptor.once("connection", (connection) => {
+      const { client } = toPhoenixChannel(connection);
+
+      client.channel("room:lobby", (channel) => {
+        mockPresence.track("2", { user_id: "2" });
+        mockPresence.subscribe(channel);
+        channel.push("presence_state", mockPresence.list());
+      });
+    });
+
+    const socket = new Socket("wss://example.com/socket");
+    socket.connect();
+    const channel = socket.channel("room:lobby");
+    const presence = new Presence(channel);
+    channel.join();
+
+    await expect
+      .poll(() => presence.list())
+      .toEqual([
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "1",
+            }),
+          ],
+        },
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "2",
+            }),
+          ],
+        },
+      ]);
+
+    tracker.update({ user_id: "1", online: true });
+
+    await expect
+      .poll(() => presence.list())
+      .toEqual([
+        {
+          metas: [
+            expect.objectContaining({
+              online: true,
+              user_id: "1",
+            }),
+          ],
+        },
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "2",
+            }),
+          ],
+        },
+      ]);
+  });
+
+  it("remove presence when untrack", async () => {
+    const mockPresence = new MockPresence();
+    interceptor.on("connection", (connection) => {
+      const { client } = toPhoenixChannel(connection);
+
+      client.channel("room:lobby", (channel) => {
+        channel.onJoin = (_topic, { user_id }: any) => {
+          const tracker = mockPresence.track(user_id, { user_id });
+          channel.onLeave = () => {
+            tracker.untrack();
+            return "ok";
+          };
+          mockPresence.subscribe(channel);
+          channel.push("presence_state", mockPresence.list());
+          return "ok";
+        };
+      });
+    });
+
+    const socket1 = new Socket("wss://example.com/socket");
+    socket1.connect();
+    const channel1 = socket1.channel("room:lobby", { user_id: "1" });
+    channel1.join();
+
+    const socket2 = new Socket("wss://example.com/socket");
+    socket2.connect();
+    const channel2 = socket2.channel("room:lobby", { user_id: "2" });
+    const presence = new Presence(channel2);
+    channel2.join();
+
+    await expect
+      .poll(() => presence.list())
+      .toEqual([
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "1",
+            }),
+          ],
+        },
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "2",
+            }),
+          ],
+        },
+      ]);
+
+    channel1.leave();
+    await expect
+      .poll(() => presence.list())
+      .toEqual([
+        {
+          metas: [
+            expect.objectContaining({
+              user_id: "2",
+            }),
+          ],
+        },
+      ]);
+  });
 });

@@ -36,7 +36,7 @@ export function encodePayload(message: PhoenixChannelMessage): string {
   ]);
 }
 
-class ClientChannel {
+export class ClientChannel {
   listeners = new Map<
     string,
     (event: MessageEvent, message: PhoenixChannelMessage) => void
@@ -45,7 +45,8 @@ class ClientChannel {
   constructor(
     public topic: string,
     private joinRef: string | null,
-    readonly connection: WebSocketClientConnection
+    readonly connection: WebSocketClientConnection,
+    private closeCallback: () => void
   ) {}
 
   on(
@@ -82,6 +83,33 @@ class ClientChannel {
   public onJoin: (topic: string, payload: unknown) => "ok" | "error" = () =>
     "ok";
   public onLeave: (topic: string) => "ok" | "error" = () => "ok";
+
+  close() {
+    this.connection.send(
+      encodePayload({
+        joinRef: this.joinRef,
+        ref: this.joinRef,
+        topic: this.topic,
+        event: "phx_close",
+        payload: {},
+      })
+    );
+    this.closeCallback();
+    this.onLeave(this.topic);
+  }
+  error() {
+    this.connection.send(
+      encodePayload({
+        joinRef: this.joinRef,
+        ref: this.joinRef,
+        topic: this.topic,
+        event: "phx_error",
+        payload: {},
+      })
+    );
+    this.closeCallback();
+    this.onLeave(this.topic);
+  }
 }
 
 class PhoenixChannelClientConnection {
@@ -89,13 +117,18 @@ class PhoenixChannelClientConnection {
   private channelSetup = new Map<string, (channel: ClientChannel) => void>();
 
   constructor(readonly connection: WebSocketClientConnection) {
-    const chan = new ClientChannel("phoenix", null, this.connection);
+    const chan = new ClientChannel("phoenix", null, this.connection, () => {
+      this._removeChannel(chan);
+    });
     chan.on("heartbeat", (event, message) => {
       if (message.ref != null) {
         chan.reply(message.ref, { response: message.payload, status: "ok" });
       }
     });
     this.channels.push(chan);
+    this.connection.addEventListener("close", () => {
+      this._handleClose();
+    });
 
     this.connection.addEventListener("message", (event) => {
       const message = decodePayload(event.data);
@@ -111,9 +144,17 @@ class PhoenixChannelClientConnection {
         case "phx_reply":
           break;
         case "phx_leave":
-          this.channels = this.channels.filter(
-            (channel) => channel.topic !== message.topic
-          );
+          {
+            const leaveChannels = this.channels.filter(
+              (channel) => channel.topic === message.topic
+            );
+            this.channels = this.channels.filter(
+              (channel) => !leaveChannels.includes(channel)
+            );
+            for (const channel of leaveChannels) {
+              channel.onLeave(message.topic);
+            }
+          }
           break;
         case "phx_join":
           this.handleJoin(message);
@@ -149,7 +190,8 @@ class PhoenixChannelClientConnection {
         const channel = new ClientChannel(
           message.topic,
           message.joinRef,
-          this.connection
+          this.connection,
+          () => this._removeChannel(channel)
         );
         setup(channel);
         const joinResult = channel.onJoin(message.topic, message.payload);
@@ -169,6 +211,17 @@ class PhoenixChannelClientConnection {
 
   close() {
     this.connection.close();
+  }
+
+  _handleClose(){
+    for (const channel of this.channels) {
+      channel.close();
+    }
+  }
+
+  //private
+  _removeChannel(chan: ClientChannel) {
+    this.channels = this.channels.filter((channel) => channel !== chan);
   }
 }
 class PhoenixChannelServerConnection {
@@ -215,4 +268,112 @@ export function toPhoenixChannel(connection: WebSocketConnectionData) {
     connection.client,
     connection.server
   );
+}
+
+type MockPresenceOptions = {
+  events?: {
+    state: string;
+    diff: string;
+  };
+};
+
+const makeRef = () => {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+};
+
+type Tracker = {
+  update: (meta: object) => void;
+  untrack: () => void;
+}
+export class MockPresence {
+  private precences: Record<string, { metas: Record<string, unknown> }> = {};
+  private events: { diff: string };
+  private channels: ClientChannel[] = [];
+  constructor(
+    options: MockPresenceOptions = {}
+  ) {
+    const { 
+      events = { diff: "presence_diff" }, } = options;
+    this.events = events;
+  }
+
+  track(key: string, meta: object): Tracker {
+    const trackRef = makeRef();
+    const exec = () => {
+      const newMeta = { ...meta, phx_ref: trackRef };
+      const presence = this.precences[key];
+      if (presence) {
+        const metas: Record<string, unknown> = {
+          ...presence.metas,
+          [trackRef]: newMeta,
+        };
+        this.precences[key] = { ...presence, metas };
+      } else {
+        this.precences[key] = { metas: { [trackRef]: newMeta } };
+      }
+      this.broadcast_diff( {
+        joins: { [key]: { metas: [newMeta] } },
+        leaves: {},
+      });
+    };
+    exec();
+
+    return {
+      update: (meta: object) => {
+        const newMeta = { ...meta, phx_ref: makeRef() };
+        const presence = this.precences[key];
+        if (!presence) {
+          throw new Error(`No presence for key ${key}`);
+        }
+        const old = presence.metas[trackRef];
+        const metas: Record<string, unknown> = {
+          ...presence.metas,
+          [trackRef]: newMeta,
+        };
+        this.precences[key] = { ...presence, metas };
+        this.broadcast_diff({
+          joins: { [key]: { metas: [newMeta] } },
+          leaves: { [key]: { metas: [old] } },
+        });
+      },
+      untrack: () => {
+        const presence = this.precences[key];
+        if (!presence) {
+          throw new Error(`No presence for key ${key}`);
+        }
+
+        const { [trackRef]: old, ...metas } = presence.metas;
+        if (Object.entries(metas).length === 0) {
+          delete this.precences[key];
+        } else {
+          this.precences[key] = { ...presence, metas };
+        }
+
+        this.broadcast_diff({
+          joins: {},
+          leaves: { [key]: { metas: [old] } },
+        });
+      },
+    };
+  }
+
+  list() {
+    const entries = Object.entries(this.precences).map(([key, { metas }]) => 
+      [key, {metas: Object.values(metas)}]
+    );
+    return Object.fromEntries(entries);
+  }
+
+  subscribe(channel: ClientChannel) {
+    this.channels.push(channel);
+    return ()=>{
+      this.channels = this.channels.filter((c) => c !== channel);
+    }
+  }
+
+  broadcast_diff(diff: { joins: Record<string, { metas: unknown[] }>; leaves: Record<string, { metas: unknown[] }> }) {
+    for (const channel of this.channels) {
+      channel.push(this.events.diff, diff);
+    }
+  }
 }
