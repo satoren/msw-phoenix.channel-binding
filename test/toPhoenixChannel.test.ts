@@ -336,6 +336,74 @@ it("invoke onLeave when leaving channel", async () => {
   await expect.poll(() => onLeaveMock).toHaveBeenCalled();
 });
 
+describe("close", () => {
+  it("reconnect and rejoin if abnormal close", async () => {
+    const handler = (connection: WebSocketConnectionData) => {
+      const { client } = toPhoenixChannel(connection);
+      client.channel("room:lobby", (channel) => {
+        channel.on("close", ()=>{
+          connection.client.close(1001);
+        })
+      });
+    }
+    interceptor.on("connection",handler);
+  
+    const socket = new Socket("wss://example.com/socket", {
+      reconnectAfterMs: () => {
+        return 0
+      },
+    });
+    socket.connect();
+    const channel = socket.channel("room:lobby");
+    const onClose = vi.fn();
+    const onOpen = vi.fn();
+    const join = vi.fn();
+    channel.join().receive("ok", join);
+    channel.push("close", {  });
+    socket.onClose(onClose);
+    socket.onOpen(onOpen);
+  
+    await expect.poll(() => onClose).toBeCalledTimes(1);
+    await expect.poll(() => onOpen).toBeCalledTimes(2);
+    await expect.poll(() => join).toBeCalledTimes(2);
+
+    interceptor.off("connection",handler);
+  });
+  it("reconnect and rejoin start reconnectTimer", async () => {
+    const handler = (connection: WebSocketConnectionData) => {
+      const { client } = toPhoenixChannel(connection);
+      client.channel("room:lobby", (channel) => {
+        channel.on("close", ()=>{
+          connection.client.close(1000);
+        })
+      });
+    }
+    interceptor.on("connection",handler);
+  
+    const socket = new Socket("wss://example.com/socket", {
+      reconnectAfterMs: () => {
+        return 0
+      },
+    });
+    socket.connect();
+    const channel = socket.channel("room:lobby");
+    const onOpen = vi.fn();
+    const join = vi.fn();
+    channel.join().receive("ok", join);
+    channel.push("close", {  });
+    socket.onClose((e)=>{
+      if (e.code === 1000) {
+        socket.reconnectTimer.scheduleTimeout();
+      }
+    });
+    socket.onOpen(onOpen);
+  
+    await expect.poll(() => onOpen).toBeCalledTimes(2);
+    await expect.poll(() => join).toBeCalledTimes(2);
+
+    interceptor.off("connection",handler);
+  });
+});
 describe("Presence", () => {
   it("presence state", async () => {
     const mockPresence = new MockPresence();
