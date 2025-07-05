@@ -1,8 +1,8 @@
 {
-  "compilerOptions": {
-    "types": ["@types/node", "vitest/globals"],
-    "noEmit": true,
-    "lib": ["esnext", "DOM"]
-  },
-  "include": ["../src", "./**/*.ts"]
+	"compilerOptions": {
+		"types": ["@types/node", "vitest/globals"],
+		"noEmit": true,
+		"lib": ["esnext", "DOM"]
+	},
+	"include": ["../src", "./**/*.ts"]
 }
