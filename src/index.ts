@@ -1,5 +1,5 @@
 import type {
-	WebSocketClientConnection,
+	WebSocketClientConnectionProtocol,
 	WebSocketConnectionData,
 	WebSocketServerConnection,
 } from "@mswjs/interceptors/WebSocket";
@@ -45,7 +45,7 @@ export class ClientChannel {
 	constructor(
 		public topic: string,
 		private joinRef: string | null,
-		readonly connection: WebSocketClientConnection,
+		readonly connection: WebSocketClientConnectionProtocol,
 		private closeCallback: () => void,
 	) {}
 
@@ -116,7 +116,7 @@ class PhoenixChannelClientConnection {
 	private channels: ClientChannel[] = [];
 	private channelSetup = new Map<string, (channel: ClientChannel) => void>();
 
-	constructor(readonly connection: WebSocketClientConnection) {
+	constructor(readonly connection: WebSocketClientConnectionProtocol) {
 		const chan = new ClientChannel("phoenix", null, this.connection, () => {
 			this._removeChannel(chan);
 		});
@@ -255,7 +255,7 @@ class PhoenixChannelDuplexConnection {
 	public server: PhoenixChannelServerConnection;
 
 	constructor(
-		readonly rawClient: WebSocketClientConnection,
+		readonly rawClient: WebSocketClientConnectionProtocol,
 		readonly rawServer: WebSocketServerConnection,
 	) {
 		this.client = new PhoenixChannelClientConnection(this.rawClient);

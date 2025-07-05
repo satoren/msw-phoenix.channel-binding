@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "msw-phoenix.channel-binding",
-	"version": "0.1.0",
+	"version": "0.1.2",
 	"description": "",
 	"main": "./build/index.js",
 	"types": "./build/index.d.ts",
@@ -9,7 +9,7 @@
 		"test": "vitest",
 		"build": "tsup",
 		"check": "biome check",
-		"check:fix": "biome check"
+		"check:fix": "biome check --write"
 	},
 	"publishConfig": {
 		"access": "public"
@@ -24,16 +24,21 @@
 		"mock"
 	],
 	"author": "satoren <satoreyo@hotmail.com>",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/satoren/msw-phoenix.channel-binding"
+	},
+	"bugs": {
+		"url": "https://github.com/satoren/msw-phoenix.channel-binding/issues"
+	},
+	"homepage": "https://github.com/satoren/msw-phoenix.channel-binding#readme",
 	"license": "MIT",
 	"peerDependencies": {
-		"@mswjs/interceptors": "*"
-	},
-	"dependencies": {
-		"@mswjs/interceptors": "^0.37.1"
+		"@mswjs/interceptors": ">=0.37"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@mswjs/interceptors": "^0.37.1",
+		"@mswjs/interceptors": "0.39.2",
 		"@types/node": "^20.11.16",
 		"@types/phoenix": "1.6.6",
 		"jsdom": "^25.0.1",
