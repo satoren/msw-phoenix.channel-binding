@@ -26,7 +26,7 @@ importers:
         version: 25.0.1
       phoenix:
         specifier: ^1.7.14
-        version: 1.7.14
+        version: 1.7.21
       tsup:
         specifier: ^8.3.5
         version: 8.3.5(postcss@8.4.38)(typescript@5.7.2)
@@ -919,8 +919,8 @@ packages:
     resolution: {integrity: sha512-vE7JKRyES09KiunauX7nd2Q9/L7lhok4smP9RZTDeD4MVs72Dp2qNFVz39Nz5a0FVEW0BJR6C0DYrq6unoziZA==}
     engines: {node: '>= 14.16'}
 
-  phoenix@1.7.14:
-    resolution: {integrity: sha512-3tZ76PiH/2g+Kyzhz8+GIFYrnx3lRnwi/Qt3ZUH04xpMxXL7Guerd5aaxtpWal73X+H8iLAjo2c+AgRy2KYQcQ==}
+  phoenix@1.7.21:
+    resolution: {integrity: sha512-8wOvJ8pQXRxNbyFlMI+wQhK3bvX4Ps3FtUX2+0cV6lkcebe9VTIl+xS60FLAeaPieFg80djor5z/AKofnwqAUw==}
 
   picocolors@1.0.0:
     resolution: {integrity: sha512-1fygroTLlHu66zi26VoTDv8yRgm0Fccecssto+MhsZ0D/DGW2sm8E8AjW7NU5VVTRt5GxbeZ5qBuJr+HyLYkjQ==}
@@ -1944,7 +1944,7 @@ snapshots:
 
   pathval@2.0.0: {}
 
-  phoenix@1.7.14: {}
+  phoenix@1.7.21: {}
 
   picocolors@1.0.0: {}
 
