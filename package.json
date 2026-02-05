@@ -39,7 +39,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"@mswjs/interceptors": "0.40.0",
-		"@types/node": "^20.11.16",
+		"@types/node": "^24.0.0",
 		"@types/phoenix": "1.6.6",
 		"jsdom": "^27.0.0",
 		"phoenix": "^1.7.14",
