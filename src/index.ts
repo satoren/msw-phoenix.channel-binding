@@ -1,8 +1,5 @@
-import type {
-	WebSocketClientConnectionProtocol,
-	WebSocketConnectionData,
-	WebSocketServerConnection,
-} from "@mswjs/interceptors/WebSocket";
+import type { WebSocketConnectionData } from "@mswjs/interceptors/WebSocket";
+import type { WebSocketHandlerConnection } from "msw";
 
 export type PhoenixChannelMessage<T = unknown> = {
 	joinRef: string | null;
@@ -36,6 +33,15 @@ export function encodePayload(message: PhoenixChannelMessage): string {
 	]);
 }
 
+function matchTopic(pattern: string, topic: string): boolean {
+	// Treat * as a wildcard only at the end
+	if (pattern.endsWith("*")) {
+		const prefix = pattern.slice(0, -1);
+		return topic.startsWith(prefix);
+	}
+	return pattern === topic;
+}
+
 export class ClientChannel {
 	listeners = new Map<
 		string,
@@ -45,7 +51,7 @@ export class ClientChannel {
 	constructor(
 		public topic: string,
 		private joinRef: string | null,
-		readonly connection: WebSocketClientConnectionProtocol,
+		readonly connection: WebSocketHandlerConnection["client"],
 		private closeCallback: () => void,
 	) {}
 
@@ -116,7 +122,7 @@ class PhoenixChannelClientConnection {
 	private channels: ClientChannel[] = [];
 	private channelSetup = new Map<string, (channel: ClientChannel) => void>();
 
-	constructor(readonly connection: WebSocketClientConnectionProtocol) {
+	constructor(readonly connection: WebSocketHandlerConnection["client"]) {
 		const chan = new ClientChannel("phoenix", null, this.connection, () => {
 			this._removeChannel(chan);
 		});
@@ -186,7 +192,7 @@ class PhoenixChannelClientConnection {
 
 	private handleJoin(message: PhoenixChannelMessage) {
 		for (const [topic, setup] of this.channelSetup) {
-			if (message.topic.startsWith(topic) && message.joinRef != null) {
+			if (matchTopic(topic, message.topic) && message.joinRef != null) {
 				const channel = new ClientChannel(
 					message.topic,
 					message.joinRef,
@@ -225,7 +231,7 @@ class PhoenixChannelClientConnection {
 	}
 }
 class PhoenixChannelServerConnection {
-	constructor(readonly connection: WebSocketServerConnection) {}
+	constructor(readonly connection: WebSocketHandlerConnection["server"]) {}
 
 	on(
 		event: "message",
@@ -255,15 +261,17 @@ class PhoenixChannelDuplexConnection {
 	public server: PhoenixChannelServerConnection;
 
 	constructor(
-		readonly rawClient: WebSocketClientConnectionProtocol,
-		readonly rawServer: WebSocketServerConnection,
+		readonly rawClient: WebSocketHandlerConnection["client"],
+		readonly rawServer: WebSocketHandlerConnection["server"],
 	) {
 		this.client = new PhoenixChannelClientConnection(this.rawClient);
 		this.server = new PhoenixChannelServerConnection(this.rawServer);
 	}
 }
 
-export function toPhoenixChannel(connection: WebSocketConnectionData) {
+export function toPhoenixChannel(
+	connection: Pick<WebSocketHandlerConnection, "client" | "server">,
+) {
 	return new PhoenixChannelDuplexConnection(
 		connection.client,
 		connection.server,
