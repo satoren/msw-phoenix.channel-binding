@@ -32,22 +32,3 @@ interceptor.on('connection', (connection) => {
 
 ```
 > You can also use this package with Mock Service Worker directly.
-
-## Release flow (Changesets + GitHub Actions)
-
-- Add a changeset for user-facing changes:
-
-```bash
-pnpm changeset
-```
-
-- Commit and push it to `main` via pull request.
-- On push to `main`, GitHub Actions (`.github/workflows/release.yml`) will:
-  - create/update a release PR when version changes are pending,
-  - publish to npm when a version PR is merged.
-- This setup follows `changesets/action` "With Publishing" flow.
-
-### Required repository secret
-
-- `NPM_TOKEN`: npm automation token with publish permission for this package.
-- Make sure the token can publish this package (if npm 2FA is enabled, use an automation token).
