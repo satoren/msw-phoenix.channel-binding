@@ -1,7 +1,4 @@
-import {
-	WebSocketConnectionData,
-	WebSocketInterceptor,
-} from "@mswjs/interceptors/WebSocket";
+import { WebSocketInterceptor } from "@mswjs/interceptors/WebSocket";
 
 import { Presence, Socket } from "phoenix";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -29,8 +26,13 @@ function getWsUrl(): string {
 	}
 	return `ws://${address.address}:${address.port}/socket`;
 }
+
 beforeAll(async () => {
 	interceptor.apply();
+});
+
+afterEach(() => {
+	interceptor.removeAllListeners();
 });
 
 afterAll(async () => {
@@ -108,8 +110,7 @@ it("sends a mocked custom incoming server event", async () => {
 			);
 		});
 	});
-
-	const socket = new Socket("wss://example.com/socket");
+	const socket = new Socket(getWsUrl());
 	socket.connect();
 	const channel = socket.channel("room:lobby");
 	channel.join();
@@ -149,7 +150,7 @@ it("sends a mocked custom incoming reply message", async () => {
 		});
 	});
 
-	const socket = new Socket("wss://example.com/socket");
+	const socket = new Socket(getWsUrl());
 	socket.connect();
 	const channel = socket.channel("room:lobby");
 	channel.join();
@@ -175,7 +176,7 @@ it("sends a pushed message", async () => {
 		});
 	});
 
-	const socket = new Socket("wss://example.com/socket");
+	const socket = new Socket(getWsUrl());
 	socket.connect();
 	const channel = socket.channel("room:lobby");
 	const mock = vi.fn(() => {});
@@ -319,6 +320,7 @@ it("modifies incoming server event", async () => {
 
 it("invoke onLeave when leaving channel", async () => {
 	const onLeaveMock = vi.fn(() => "ok" as const);
+
 	interceptor.once("connection", (connection) => {
 		const { client } = toPhoenixChannel(connection);
 
@@ -328,7 +330,7 @@ it("invoke onLeave when leaving channel", async () => {
 		});
 	});
 
-	const socket = new Socket("wss://example.com/socket");
+	const socket = new Socket(getWsUrl());
 	socket.connect();
 	const channel = socket.channel("room:lobby");
 	const mock = vi.fn(() => {});
@@ -337,6 +339,101 @@ it("invoke onLeave when leaving channel", async () => {
 	channel.leave();
 
 	await expect.poll(() => onLeaveMock).toHaveBeenCalled();
+});
+
+it("matches channel with wildcard pattern", async () => {
+	const eventLog: Map<string, string> = new Map();
+	const joinPromises = [
+		new DeferredPromise<unknown>(),
+		new DeferredPromise<unknown>(),
+		new DeferredPromise<unknown>(),
+	];
+
+	interceptor.once("connection", (connection) => {
+		const { client } = toPhoenixChannel(connection);
+
+		// Match with wildcard pattern room:*
+		client.channel("room:*", (channel) => {
+			channel.onJoin = (topic) => {
+				eventLog.set(topic, "joined");
+				return "ok";
+			};
+			channel.on(
+				"test",
+				(
+					_event,
+					{ topic, payload }: PhoenixChannelMessage<{ data: string }>,
+				) => {
+					eventLog.set(topic, payload.data);
+				},
+			);
+		});
+	});
+
+	const socket = new Socket(getWsUrl());
+	socket.connect();
+
+	// Connect to channels under different rooms
+	const channel1 = socket.channel("room:lobby");
+	const channel2 = socket.channel("room:123");
+	const channel3 = socket.channel("room:abc:sub");
+
+	channel1.join().receive("ok", () => joinPromises[0].resolve(true));
+	channel2.join().receive("ok", () => joinPromises[1].resolve(true));
+	channel3.join().receive("ok", () => joinPromises[2].resolve(true));
+
+	await Promise.all(joinPromises.map((p) => p.promise));
+
+	// Verify all channels are matched
+	expect(eventLog.get("room:lobby")).toBe("joined");
+	expect(eventLog.get("room:123")).toBe("joined");
+	expect(eventLog.get("room:abc:sub")).toBe("joined");
+
+	// Test message sending
+	channel1.push("test", { data: "lobby message" });
+	channel2.push("test", { data: "123 message" });
+	channel3.push("test", { data: "abc:sub message" });
+
+	await expect.poll(() => eventLog.get("room:lobby")).toBe("lobby message");
+	await expect.poll(() => eventLog.get("room:123")).toBe("123 message");
+	await expect.poll(() => eventLog.get("room:abc:sub")).toBe("abc:sub message");
+});
+
+it("does not match channel without wildcard", async () => {
+	const eventLog: Map<string, string> = new Map();
+	const joinPromise1 = new DeferredPromise<unknown>();
+	const joinPromise2 = new DeferredPromise<unknown>();
+
+	interceptor.once("connection", (connection) => {
+		const { client } = toPhoenixChannel(connection);
+
+		// Exact match without wildcard
+		client.channel("room:lobby", (channel) => {
+			channel.onJoin = (topic) => {
+				eventLog.set(topic, "joined");
+				return "ok";
+			};
+		});
+	});
+
+	const socket = new Socket(getWsUrl());
+	socket.connect();
+
+	const channel1 = socket.channel("room:lobby");
+	const channel2 = socket.channel("room:other");
+
+	channel1.join().receive("ok", () => joinPromise1.resolve(true));
+	// Should not match channels other than room:lobby
+	channel2.join().receive("ok", () => joinPromise2.resolve(true));
+
+	await joinPromise1.promise;
+
+	// Only room:lobby should match
+	expect(eventLog.get("room:lobby")).toBe("joined");
+
+	// Verify room:other has not joined with timeout
+	await new Promise((resolve) => setTimeout(resolve, 100));
+	expect(eventLog.get("room:other")).toBeUndefined();
 });
 
 describe("Presence", () => {
@@ -353,7 +450,7 @@ describe("Presence", () => {
 			});
 		});
 
-		const socket = new Socket("wss://example.com/socket");
+		const socket = new Socket(getWsUrl());
 		socket.connect();
 		const channel = socket.channel("room:lobby");
 		const presence = new Presence(channel);
@@ -419,13 +516,12 @@ describe("Presence", () => {
 				};
 			});
 		});
-
-		const socket1 = new Socket("wss://example.com/socket");
+		const socket1 = new Socket(getWsUrl());
 		socket1.connect();
 		const channel1 = socket1.channel("room:lobby", { user_id: "1" });
 		channel1.join();
 
-		const socket2 = new Socket("wss://example.com/socket");
+		const socket2 = new Socket(getWsUrl());
 		socket2.connect();
 		const channel2 = socket2.channel("room:lobby", { user_id: "2" });
 		const presence = new Presence(channel2);
