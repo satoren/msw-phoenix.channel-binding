@@ -1,37 +1,19 @@
 import type { WebSocketConnectionData } from "@mswjs/interceptors/WebSocket";
 import type { WebSocketHandlerConnection } from "msw";
+import * as clientSerializer from "./clientSerializer";
+import * as serverSerializer from "./serverSerializer";
+import type {
+	PhoenixChannelClientMessage,
+	PhoenixChannelServerPush,
+} from "./type";
 
-export type PhoenixChannelMessage<T = unknown> = {
-	joinRef: string | null;
-	ref: string | null;
-	topic: string;
-	event: string;
-	payload: T;
-};
+export * as serverSerializer from "./serverSerializer";
+export * as clientSerializer from "./clientSerializer";
 
-export function decodePayload(message: {
-	toString: () => string;
-}): PhoenixChannelMessage {
-	const [joinRef, messageRef, topic, event, payload] = JSON.parse(
-		message.toString(),
-	);
-	return {
-		joinRef: joinRef,
-		ref: messageRef,
-		topic: topic,
-		event: event,
-		payload: payload,
-	};
-}
-export function encodePayload(message: PhoenixChannelMessage): string {
-	return JSON.stringify([
-		message.joinRef,
-		message.ref,
-		message.topic,
-		message.event,
-		message.payload,
-	]);
-}
+export type * from "./type";
+
+export type PhoenixChannelMessage<T = unknown | ArrayBuffer> =
+	PhoenixChannelClientMessage<T>;
 
 function matchTopic(pattern: string, topic: string): boolean {
 	// Treat * as a wildcard only at the end
@@ -45,26 +27,30 @@ function matchTopic(pattern: string, topic: string): boolean {
 export class ClientChannel {
 	listeners = new Map<
 		string,
-		(event: MessageEvent, message: PhoenixChannelMessage) => void
+		(event: MessageEvent, message: PhoenixChannelClientMessage) => void
 	>();
 
 	constructor(
 		public topic: string,
-		private joinRef: string | null,
+		private joinRef: string,
 		readonly connection: WebSocketHandlerConnection["client"],
 		private closeCallback: () => void,
 	) {}
 
 	on(
 		event: string,
-		listener: (event: MessageEvent, message: PhoenixChannelMessage) => void,
+		listener: (
+			event: MessageEvent,
+			message: PhoenixChannelClientMessage,
+		) => void,
 	) {
 		this.listeners.set(event, listener);
 	}
 
 	push(event: string, payload: unknown) {
 		this.connection.send(
-			encodePayload({
+			serverSerializer.encode({
+				kind: "push",
 				joinRef: this.joinRef,
 				ref: null,
 				topic: this.topic,
@@ -74,9 +60,13 @@ export class ClientChannel {
 		);
 	}
 
-	reply(ref: string, payload: { response: unknown; status: "ok" | "error" }) {
+	reply(
+		ref: string,
+		payload: { response: unknown | ArrayBuffer; status: "ok" | "error" },
+	) {
 		this.connection.send(
-			encodePayload({
+			serverSerializer.encode({
+				kind: "reply",
 				joinRef: this.joinRef,
 				ref: ref,
 				topic: this.topic,
@@ -92,7 +82,8 @@ export class ClientChannel {
 
 	close() {
 		this.connection.send(
-			encodePayload({
+			serverSerializer.encode({
+				kind: "push",
 				joinRef: this.joinRef,
 				ref: this.joinRef,
 				topic: this.topic,
@@ -105,7 +96,8 @@ export class ClientChannel {
 	}
 	error() {
 		this.connection.send(
-			encodePayload({
+			serverSerializer.encode({
+				kind: "push",
 				joinRef: this.joinRef,
 				ref: this.joinRef,
 				topic: this.topic,
@@ -123,7 +115,7 @@ class PhoenixChannelClientConnection {
 	private channelSetup = new Map<string, (channel: ClientChannel) => void>();
 
 	constructor(readonly connection: WebSocketHandlerConnection["client"]) {
-		const chan = new ClientChannel("phoenix", null, this.connection, () => {
+		const chan = new ClientChannel("phoenix", "", this.connection, () => {
 			this._removeChannel(chan);
 		});
 		chan.on("heartbeat", (event, message) => {
@@ -136,52 +128,63 @@ class PhoenixChannelClientConnection {
 			this._handleClose();
 		});
 
-		this.connection.addEventListener("message", (event) => {
-			const message = decodePayload(event.data);
+		this.connection.addEventListener("message", (event: MessageEvent) => {
+			try {
+				const message = serverSerializer.decode(event.data);
 
-			if (message.topic === "phoenix") {
+				if (message.topic === "phoenix") {
+					switch (message.event) {
+						case "phx_reply":
+					}
+					return;
+				}
+
 				switch (message.event) {
 					case "phx_reply":
-				}
-				return;
-			}
+						break;
+					case "phx_leave":
+						{
+							const leaveChannels = this.channels.filter(
+								(channel) => channel.topic === message.topic,
+							);
+							this.channels = this.channels.filter(
+								(channel) => !leaveChannels.includes(channel),
+							);
+							for (const channel of leaveChannels) {
+								channel.onLeave(message.topic);
+							}
+						}
+						break;
+					case "phx_join":
+						this.handleJoin(message);
+						break;
+					default: {
+						const listener = this.channels
+							.flatMap((channel) => {
+								return [...channel.listeners]
+									.filter(([event]) => event === message.event)
+									.map(([, listener]) => listener);
+							})
+							.at(0);
 
-			switch (message.event) {
-				case "phx_reply":
-					break;
-				case "phx_leave":
-					{
-						const leaveChannels = this.channels.filter(
-							(channel) => channel.topic === message.topic,
-						);
-						this.channels = this.channels.filter(
-							(channel) => !leaveChannels.includes(channel),
-						);
-						for (const channel of leaveChannels) {
-							channel.onLeave(message.topic);
+						if (listener) {
+							try {
+								listener(event, message);
+							} catch (e) {
+								console.error(
+									`Failed to handle message for ${message.topic} event:${message.event}`,
+									e,
+								);
+							}
+						} else {
+							console.log(
+								`No listener for ${message.topic} event:${message.event}`,
+							);
 						}
 					}
-					break;
-				case "phx_join":
-					this.handleJoin(message);
-					break;
-				default: {
-					const listner = this.channels
-						.flatMap((channel) => {
-							return [...channel.listeners]
-								.filter(([event]) => event === message.event)
-								.map(([, listner]) => listner);
-						})
-						.at(0);
-
-					if (listner) {
-						listner(event, message);
-					} else {
-						console.log(
-							`No listener for ${message.topic} event:${message.event}`,
-						);
-					}
 				}
+			} catch (e) {
+				console.error("Failed to decode message", e);
 			}
 		});
 	}
@@ -190,7 +193,7 @@ class PhoenixChannelClientConnection {
 		this.channelSetup.set(topic, setup);
 	}
 
-	private handleJoin(message: PhoenixChannelMessage) {
+	private handleJoin(message: PhoenixChannelClientMessage) {
 		for (const [topic, setup] of this.channelSetup) {
 			if (matchTopic(topic, message.topic) && message.joinRef != null) {
 				const channel = new ClientChannel(
@@ -211,8 +214,8 @@ class PhoenixChannelClientConnection {
 		}
 	}
 
-	push(message: PhoenixChannelMessage) {
-		this.connection.send(encodePayload(message));
+	push(message: PhoenixChannelClientMessage) {
+		this.connection.send(clientSerializer.encode(message));
 	}
 
 	close() {
@@ -235,16 +238,23 @@ class PhoenixChannelServerConnection {
 
 	on(
 		event: "message",
-		listener: (event: MessageEvent, message: PhoenixChannelMessage) => void,
+		listener: (
+			event: MessageEvent,
+			message: PhoenixChannelClientMessage,
+		) => void,
 	) {
-		this.connection.addEventListener("message", (event) => {
-			const data = decodePayload(event.data);
-			listener(event, data);
+		this.connection.addEventListener("message", (event: MessageEvent) => {
+			try {
+				const data = serverSerializer.decode(event.data);
+				listener(event, data);
+			} catch (e) {
+				console.error("Failed to decode message", e);
+			}
 		});
 	}
 
-	push(message: PhoenixChannelMessage) {
-		this.connection.send(encodePayload(message));
+	push(message: PhoenixChannelServerPush) {
+		this.connection.send(serverSerializer.encode(message));
 	}
 
 	send(message: string) {

@@ -6,8 +6,8 @@
 		"noUncheckedIndexedAccess": true,
 		"verbatimModuleSyntax": true,
 		"target": "esnext",
-		"module": "nodenext",
-		"moduleResolution": "nodenext"
+		"module": "es2015",
+		"moduleResolution": "bundler"
 	},
 	"exclude": ["node_modules", "build"]
 }
