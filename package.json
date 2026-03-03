@@ -9,10 +9,7 @@
 		"test": "vitest",
 		"build": "tsup",
 		"check": "biome check",
-		"check:fix": "biome check --write",
-		"changeset": "changeset",
-		"version": "changeset version",
-		"release": "pnpm build && changeset publish"
+		"check:fix": "biome check --write"
 	},
 	"publishConfig": {
 		"access": "public"
@@ -41,7 +38,6 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
-		"@changesets/cli": "2.29.8",
 		"@mswjs/interceptors": "0.40.0",
 		"@types/node": "^20.11.16",
 		"@types/phoenix": "1.6.6",
