@@ -4,9 +4,9 @@ import { Presence, Socket } from "phoenix";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import {
+	clientSerializer,
 	MockPresence,
 	type PhoenixChannelMessage,
-	clientSerializer,
 	serverSerializer,
 	toPhoenixChannel,
 } from "../src/index";
@@ -224,7 +224,7 @@ it("intercepts incoming server event", async () => {
 
 		const { server } = toPhoenixChannel(connection);
 
-		server.on("message", (event, message) => {
+		server.on("message", (_event, message) => {
 			incomingServerDataPromise.resolve(message);
 		});
 	});

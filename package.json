@@ -38,7 +38,7 @@
 		"msw": "^2.0.0"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
+		"@biomejs/biome": "2.4.5",
 		"@mswjs/interceptors": "0.41.3",
 		"@types/node": "^20.11.16",
 		"@types/phoenix": "1.6.7",

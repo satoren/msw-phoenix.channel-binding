@@ -1,4 +1,3 @@
-import type { WebSocketConnectionData } from "@mswjs/interceptors/WebSocket";
 import type { WebSocketHandlerConnection } from "msw";
 import * as clientSerializer from "./clientSerializer";
 import * as serverSerializer from "./serverSerializer";
@@ -7,8 +6,8 @@ import type {
 	PhoenixChannelServerPush,
 } from "./type";
 
-export * as serverSerializer from "./serverSerializer";
 export * as clientSerializer from "./clientSerializer";
+export * as serverSerializer from "./serverSerializer";
 
 export type * from "./type";
 
@@ -118,7 +117,7 @@ class PhoenixChannelClientConnection {
 		const chan = new ClientChannel("phoenix", "", this.connection, () => {
 			this._removeChannel(chan);
 		});
-		chan.on("heartbeat", (event, message) => {
+		chan.on("heartbeat", (_event, message) => {
 			if (message.ref != null) {
 				chan.reply(message.ref, { response: message.payload, status: "ok" });
 			}
@@ -234,7 +233,7 @@ class PhoenixChannelServerConnection {
 	constructor(readonly connection: WebSocketHandlerConnection["server"]) {}
 
 	on(
-		event: "message",
+		_event: "message",
 		listener: (
 			event: MessageEvent,
 			message: PhoenixChannelClientMessage,
