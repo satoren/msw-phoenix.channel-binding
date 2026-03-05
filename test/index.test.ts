@@ -37,7 +37,7 @@ describe("index edge coverage", () => {
 				data: clientSerializer.encode({
 					joinRef: "1",
 					ref: "10",
-					topic: "room:lobby",
+					topic: "phoenix",
 					event: "heartbeat",
 					payload: { ping: true },
 				}),

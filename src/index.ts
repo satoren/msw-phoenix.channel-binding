@@ -131,11 +131,7 @@ class PhoenixChannelClientConnection {
 		this.connection.addEventListener("message", (event: MessageEvent) => {
 			try {
 				const message = serverSerializer.decode(event.data);
-
-				if (message.topic === "phoenix") {
-					switch (message.event) {
-						case "phx_reply":
-					}
+				if (message.topic === "phoenix" && message.event === "phx_reply") {
 					return;
 				}
 
