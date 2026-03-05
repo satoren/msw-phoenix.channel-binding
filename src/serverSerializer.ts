@@ -14,7 +14,7 @@ function encodeReply(reply: PhoenixChannelServerReply): string | ArrayBuffer {
 		const {
 			joinRef,
 			ref,
-			event,
+			_event,
 			topic,
 			payload: { status, response },
 		} = reply;

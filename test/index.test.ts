@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	ClientChannel,
-	MockPresence,
 	clientSerializer,
+	MockPresence,
 	serverSerializer,
 	toPhoenixChannel,
 } from "../src/index";
