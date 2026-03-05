@@ -1,3 +1,5 @@
+[![npm version](https://badge.fury.io/js/msw-phoenix.channel-binding.svg)](https://badge.fury.io/js/msw-phoenix.channel-binding)
+
 # msw-phoenix.channel-binding
 
 ## Motivation
