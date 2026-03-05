@@ -64,6 +64,77 @@ describe("index edge coverage", () => {
 		expect(client.sent).toHaveLength(1);
 	});
 
+	it("routes overlapping events by topic", () => {
+		const client = new MockSocketConnection();
+		const server = new MockSocketConnection();
+		const phoenix = toPhoenixChannel({
+			client: client as never,
+			server: server as never,
+		});
+
+		const roomOneListener = vi.fn();
+		const roomTwoListener = vi.fn();
+
+		phoenix.client.channel("room:one", (channel) => {
+			channel.on("new_msg", roomOneListener);
+		});
+		phoenix.client.channel("room:two", (channel) => {
+			channel.on("new_msg", roomTwoListener);
+		});
+
+		client.dispatchEvent(
+			new MessageEvent("message", {
+				data: clientSerializer.encode({
+					joinRef: "1",
+					ref: "1",
+					topic: "room:one",
+					event: "phx_join",
+					payload: {},
+				}),
+			}),
+		);
+		client.dispatchEvent(
+			new MessageEvent("message", {
+				data: clientSerializer.encode({
+					joinRef: "2",
+					ref: "2",
+					topic: "room:two",
+					event: "phx_join",
+					payload: {},
+				}),
+			}),
+		);
+
+		client.dispatchEvent(
+			new MessageEvent("message", {
+				data: clientSerializer.encode({
+					joinRef: "2",
+					ref: "3",
+					topic: "room:two",
+					event: "new_msg",
+					payload: { body: "hi" },
+				}),
+			}),
+		);
+
+		expect(roomTwoListener).toHaveBeenCalledTimes(1);
+		expect(roomOneListener).not.toHaveBeenCalled();
+
+		client.dispatchEvent(
+			new MessageEvent("message", {
+				data: clientSerializer.encode({
+					joinRef: "1",
+					ref: "4",
+					topic: "room:one",
+					event: "new_msg",
+					payload: { body: "yo" },
+				}),
+			}),
+		);
+
+		expect(roomOneListener).toHaveBeenCalledTimes(1);
+	});
+
 	it("logs when event has no listener", () => {
 		const client = new MockSocketConnection();
 		const server = new MockSocketConnection();

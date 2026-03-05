@@ -156,6 +156,7 @@ class PhoenixChannelClientConnection {
 						break;
 					default: {
 						const listener = this.channels
+							.filter((channel) => channel.topic === message.topic)
 							.flatMap((channel) => {
 								return [...channel.listeners]
 									.filter(([event]) => event === message.event)
