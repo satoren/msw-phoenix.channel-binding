@@ -6,8 +6,8 @@ import { WebSocketServer } from "ws";
 import {
 	MockPresence,
 	type PhoenixChannelMessage,
-	decodePayload,
-	encodePayload,
+	clientSerializer,
+	serverSerializer,
 	toPhoenixChannel,
 } from "../src/index";
 
@@ -115,7 +115,9 @@ it("sends a mocked custom incoming server event", async () => {
 	const channel = socket.channel("room:lobby");
 	channel.join();
 	channel.push("hello", { name: "John" });
-	channel.on("greetings", (message) => incomingDataPromise.resolve(message));
+	channel.on("greetings", (message) => {
+		incomingDataPromise.resolve(message);
+	});
 
 	// Must emit proper outgoing server messages.
 	expect(await incomingDataPromise.promise).toBe("Hello, John!");
@@ -192,11 +194,11 @@ it("intercepts incoming server event", async () => {
 
 	wsServer.once("connection", (ws) => {
 		ws.on("message", (data) => {
-			const message = decodePayload(data.toString());
+			const message = serverSerializer.decode(data);
 			switch (message.event) {
 				case "phx_join":
 					ws.send(
-						encodePayload({
+						clientSerializer.encode({
 							ref: message.ref,
 							joinRef: message.joinRef,
 							topic: message.topic,
@@ -254,11 +256,11 @@ it("modifies incoming server event", async () => {
 
 	wsServer.once("connection", (ws) => {
 		ws.on("message", (data) => {
-			const message = decodePayload(data.toString());
+			const message = serverSerializer.decode(data);
 			switch (message.event) {
 				case "phx_join":
 					ws.send(
-						encodePayload({
+						clientSerializer.encode({
 							ref: message.ref,
 							joinRef: message.joinRef,
 							topic: message.topic,
@@ -558,5 +560,67 @@ describe("Presence", () => {
 					],
 				},
 			]);
+	});
+});
+
+describe("Binary Data", () => {
+	it("sends a mocked custom incoming reply message", async () => {
+		const eventLog: Array<string> = [];
+		const incomingDataPromise = new DeferredPromise<unknown>();
+
+		interceptor.once("connection", (connection) => {
+			connection.client.addEventListener("message", (event) =>
+				eventLog.push(event.data.toString()),
+			);
+
+			const { client } = toPhoenixChannel(connection);
+
+			client.channel("room:lobby", (channel) => {
+				channel.on(
+					"binary_data",
+					(_event, { payload, ref }: PhoenixChannelMessage<ArrayBuffer>) => {
+						const response = new Uint8Array(payload).buffer.slice(0, 8);
+						channel.reply(ref, {
+							status: "ok",
+							response,
+						});
+					},
+				);
+			});
+		});
+
+		const socket = new Socket(getWsUrl());
+		socket.connect();
+		const channel = socket.channel("room:lobby");
+		channel.join();
+		channel
+			.push("binary_data", new Uint8Array([81, 0, 0, 0, 0, 0, 0, 0]).buffer)
+			.receive("ok", (message) => {
+				incomingDataPromise.resolve(message);
+			});
+
+		// Must emit proper outgoing server messages.
+		expect(await incomingDataPromise.promise).toEqual(
+			new Uint8Array([81, 0, 0, 0, 0, 0, 0, 0]).buffer,
+		);
+	});
+
+	it("sends a pushed message", async () => {
+		interceptor.once("connection", (connection) => {
+			const { client } = toPhoenixChannel(connection);
+
+			client.channel("room:lobby2", (channel) => {
+				channel.push("hello", new Uint8Array([81, 0, 0, 0, 0, 0, 0, 0]).buffer);
+			});
+		});
+
+		const socket = new Socket(getWsUrl());
+		socket.connect();
+		const channel = socket.channel("room:lobby2");
+		const mock = vi.fn(() => {});
+		channel.on("hello", mock);
+		channel.join();
+
+		await expect.poll(() => mock).toHaveBeenCalled();
 	});
 });
