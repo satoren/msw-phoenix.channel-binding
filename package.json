@@ -9,7 +9,8 @@
 		"test": "vitest",
 		"test:coverage": "vitest run --coverage",
 		"build": "tsup",
-		"check": "biome check",
+		"check": "biome check && tsc --noEmit",
+		"typecheck": "tsc --noEmit",
 		"check:fix": "biome check --write"
 	},
 	"publishConfig": {
