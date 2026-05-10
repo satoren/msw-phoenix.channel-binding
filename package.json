@@ -40,7 +40,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.15",
-		"@mswjs/interceptors": "0.41.3",
+		"@mswjs/interceptors": "0.41.8",
 		"@types/node": "^20.11.16",
 		"@types/phoenix": "1.6.7",
 		"@vitest/coverage-v8": "4.0.18",
