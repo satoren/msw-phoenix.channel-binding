@@ -44,7 +44,7 @@
 		"@types/node": "^20.11.16",
 		"@types/phoenix": "1.6.7",
 		"@vitest/coverage-v8": "4.0.18",
-		"jsdom": "27.0.0",
+		"jsdom": "27.4.0",
 		"msw": "2.12.10",
 		"phoenix": "^1.7.14",
 		"tsup": "^8.3.5",
