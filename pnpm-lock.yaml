@@ -18,8 +18,8 @@ importers:
         specifier: ^20.11.16
         version: 20.19.35
       '@types/phoenix':
-        specifier: 1.6.7
-        version: 1.6.7
+        specifier: 1.6.8
+        version: 1.6.8
       '@vitest/coverage-v8':
         specifier: 4.0.18
         version: 4.0.18(vitest@4.0.18(@types/node@20.19.35)(happy-dom@15.11.7)(jsdom@27.0.0)(msw@2.12.10(@types/node@20.19.35)(typescript@5.9.3)))
@@ -813,8 +813,8 @@ packages:
   '@types/node@20.19.35':
     resolution: {integrity: sha512-Uarfe6J91b9HAUXxjvSOdiO2UPOKLm07Q1oh0JHxoZ1y8HoqxDAu3gVrsrOHeiio0kSsoVBt4wFrKOm0dKxVPQ==}
 
-  '@types/phoenix@1.6.7':
-    resolution: {integrity: sha512-oN9ive//QSBkf19rfDv45M7eZPi0eEXylht2OLEXicu5b4KoQ1OzXIw+xDSGWxSxe1JmepRR/ZH283vsu518/Q==}
+  '@types/phoenix@1.6.8':
+    resolution: {integrity: sha512-8uBiGk2kDk+e0/9eq8CWuDG5VLrS50roV4doR3xn21/EL8olbWSi2TBNa/CFJS00VLOuawH/UGQQsn+2W8tNrA==}
 
   '@types/statuses@2.0.6':
     resolution: {integrity: sha512-xMAgYwceFhRA2zY+XbEA7mxYbA093wdiW8Vu6gZPGWy9cmOyU9XesH1tNcEWsKFd5Vzrqx5T3D38PWx1FIIXkA==}
@@ -2000,7 +2000,7 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/phoenix@1.6.7': {}
+  '@types/phoenix@1.6.8': {}
 
   '@types/statuses@2.0.6': {}
 
